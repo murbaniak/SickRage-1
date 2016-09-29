@@ -45,7 +45,8 @@ from sickrage.show.Show import Show
 from sickrage.helper.exceptions import ex
 
 # https://github.com/Diaoul/subliminal/issues/536
-# provider_manager.register('napiprojekt = subliminal.providers.napiprojekt:NapiProjektProvider')
+if 'napiprojekt' not in provider_manager.names():
+    provider_manager.register('napiprojekt = subliminal.providers.napiprojekt:NapiProjektProvider')
 if 'legendastv' not in provider_manager.names():
     provider_manager.register('legendastv = subliminal.providers.legendastv:LegendasTVProvider')
 if 'itasa' not in provider_manager.names():
