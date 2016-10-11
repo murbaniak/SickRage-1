@@ -47,6 +47,7 @@ import xml.etree.ElementTree as ET
 
 import adba
 import certifi
+import cfscrape
 import requests
 from requests.utils import urlparse
 from cachecontrol import CacheControl
@@ -60,10 +61,8 @@ from sickrage.helper.encoding import ek
 from sickrage.show.Show import Show
 
 
-import shutil_custom
 
 
-shutil.copyfile = shutil_custom.copyfile_custom
 
 # pylint: disable=protected-access
 # Access to a protected member of a client class
@@ -1337,16 +1336,19 @@ def make_session():
 
     session.headers.update({'User-Agent': USER_AGENT, 'Accept-Encoding': 'gzip,deflate'})
 
+    session = cfscrape.create_scraper(sess=session)
+
     return CacheControl(sess=session, cache_etags=True)
 
 
 def request_defaults(kwargs):
     hooks = kwargs.pop('hooks', None)
     cookies = kwargs.pop('cookies', None)
+    allow_proxy = kwargs.pop('allow_proxy', True)
     verify = certifi.old_where() if all([sickbeard.SSL_VERIFY, kwargs.pop('verify', True)]) else False
 
     # request session proxies
-    if sickbeard.PROXY_SETTING:
+    if allow_proxy and sickbeard.PROXY_SETTING:
         logger.log("Using global proxy: " + sickbeard.PROXY_SETTING, logger.DEBUG)
         parsed_url = urlparse(sickbeard.PROXY_SETTING)
         address = sickbeard.PROXY_SETTING if parsed_url.scheme else 'http://' + sickbeard.PROXY_SETTING
@@ -1382,7 +1384,7 @@ def getURL(url, post_data=None, params=None, headers=None,  # pylint:disable=too
                     post_data[param] = post_data[param].encode('utf-8')
 
         resp = session.request(
-            'POST' if post_data else 'GET', url, data=post_data, params=params,
+            'POST' if post_data else 'GET', url, data=post_data or {}, params=params or {},
             timeout=timeout, allow_redirects=True, hooks=hooks, stream=stream,
             headers=headers, cookies=cookies, proxies=proxies, verify=verify
         )
@@ -1586,7 +1588,7 @@ def verify_freespace(src, dest, oldfile=None, method="copy"):
         return True
 
     # Lets also do this for symlink and hardlink
-    if method.endswith('link') and diskfree > 1024**2:
+    if 'link' in method and diskfree > 1024**2:
         return True
 
     neededspace = ek(os.path.getsize, src)
