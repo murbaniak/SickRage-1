@@ -1,8 +1,10 @@
 # coding=utf-8
+
+from __future__ import print_function, unicode_literals
+
 import os
 import threading
 
-from tornado.httpserver import HTTPServer
 from tornado.ioloop import IOLoop
 from tornado.routes import route
 from tornado.web import Application, RedirectHandler, StaticFileHandler
@@ -61,12 +63,12 @@ class SRWebServer(threading.Thread):  # pylint: disable=too-many-instance-attrib
             if not (self.https_cert and ek(os.path.exists, self.https_cert)) or not (
                     self.https_key and ek(os.path.exists, self.https_key)):
                 if not create_https_certificates(self.https_cert, self.https_key):
-                    logger.log(u"Unable to create CERT/KEY files, disabling HTTPS")
+                    logger.log("Unable to create CERT/KEY files, disabling HTTPS")
                     sickbeard.ENABLE_HTTPS = False
                     self.enable_https = False
 
             if not (ek(os.path.exists, self.https_cert) and ek(os.path.exists, self.https_key)):
-                logger.log(u"Disabled HTTPS because of missing CERT and KEY files", logger.WARNING)
+                logger.log("Disabled HTTPS because of missing CERT and KEY files", logger.WARNING)
                 sickbeard.ENABLE_HTTPS = False
                 self.enable_https = False
 
@@ -76,7 +78,6 @@ class SRWebServer(threading.Thread):  # pylint: disable=too-many-instance-attrib
             debug=True,
             autoreload=False,
             gzip=sickbeard.WEB_USE_GZIP,
-            xheaders=sickbeard.HANDLE_REVERSE_PROXY,
             cookie_secret=sickbeard.WEB_COOKIE_SECRET,
             login_url='{0}/login/'.format(self.options['web_root']),
         )
@@ -136,21 +137,22 @@ class SRWebServer(threading.Thread):  # pylint: disable=too-many-instance-attrib
     def run(self):
         if self.enable_https:
             protocol = "https"
-            self.server = HTTPServer(self.app, ssl_options={"certfile": self.https_cert, "keyfile": self.https_key})
+            ssl_options = {"certfile": self.https_cert, "keyfile": self.https_key}
         else:
             protocol = "http"
-            self.server = HTTPServer(self.app)
+            ssl_options = None
 
-        logger.log(u"Starting SickRage on " + protocol + "://" + str(self.options['host']) + ":" + str(
+        logger.log("Starting SickRage on " + protocol + "://" + str(self.options['host']) + ":" + str(
             self.options['port']) + "/")
 
         try:
-            self.server.listen(self.options['port'], self.options['host'])
+            self.server = self.app.listen(self.options['port'], self.options['host'], ssl_options=ssl_options,
+                                          xheaders=sickbeard.HANDLE_REVERSE_PROXY, protocol=protocol)
         except Exception:
             if sickbeard.LAUNCH_BROWSER and not self.daemon:
                 sickbeard.launchBrowser('https' if sickbeard.ENABLE_HTTPS else 'http', self.options['port'], sickbeard.WEB_ROOT)
-                logger.log(u"Launching browser and exiting")
-            logger.log(u"Could not start webserver on port {0}, already in use!".format(self.options['port']))
+                logger.log("Launching browser and exiting")
+            logger.log("Could not start webserver on port {0}, already in use!".format(self.options['port']))
             os._exit(1)  # pylint: disable=protected-access
 
         try:

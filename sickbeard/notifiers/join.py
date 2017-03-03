@@ -19,15 +19,13 @@
 
 from __future__ import unicode_literals
 
-import urllib
-import urllib2
 
 import sickbeard
 from sickbeard import logger
-from sickbeard.common import notifyStrings, NOTIFY_GIT_UPDATE, NOTIFY_GIT_UPDATE_TEXT, NOTIFY_LOGIN, NOTIFY_LOGIN_TEXT, \
-    NOTIFY_SNATCH, NOTIFY_DOWNLOAD, NOTIFY_SUBTITLE_DOWNLOAD
+from sickbeard.common import NOTIFY_DOWNLOAD, NOTIFY_GIT_UPDATE, NOTIFY_GIT_UPDATE_TEXT, NOTIFY_LOGIN, NOTIFY_LOGIN_TEXT, NOTIFY_SNATCH, \
+    NOTIFY_SUBTITLE_DOWNLOAD, notifyStrings
 
-from sickrage.helper import HTTP_STATUS_CODES
+from six.moves import urllib
 
 
 class Notifier(object):
@@ -59,20 +57,20 @@ class Notifier(object):
         logger.log('Join in use with device ID: {0}'.format(id), logger.DEBUG)
 
         message = '{0} : {1}'.format(title.encode(), msg.encode())
-        params = {   
+        params = {
             "deviceId": id,
             "title": title,
             "text": message,
             "icon": "https://raw.githubusercontent.com/SickRage/SickRage/master/gui/slick/images/sickrage.png"
         }
-        payload = urllib.urlencode(params)
+        payload = urllib.parse.urlencode(params)
         join_api = 'https://joinjoaomgcd.appspot.com/_ah/api/messaging/v1/sendPush?' + payload
         logger.log('Join url in use : {0}'.format(join_api), logger.DEBUG)
         success = False
         try:
-            urllib2.urlopen(join_api)
+            urllib.request.urlopen(join_api)
             message = 'Join message sent successfully.'
-            logger.log('Join message returned : {0}'.format(message), logger.DEBUG) 
+            logger.log('Join message returned : {0}'.format(message), logger.DEBUG)
             success = True
         except Exception as e:
             message = 'Error while sending Join message: {0} '.format(e)

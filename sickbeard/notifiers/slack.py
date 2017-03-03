@@ -26,6 +26,9 @@ from sickbeard import logger, common
 from sickrage.helper.exceptions import ex
 
 
+import six
+
+
 class Notifier(object):
 
     SLACK_WEBHOOK_URL = 'https://hooks.slack.com/services/'
@@ -63,12 +66,12 @@ class Notifier(object):
         logger.log("Sending slack message: " + message, logger.INFO)
         logger.log("Sending slack message  to url: " + slack_webhook, logger.INFO)
 
-        if isinstance(message, unicode):
+        if isinstance(message, six.text_type):
             message = message.encode('utf-8')
 
         headers = {b"Content-Type": b"application/json"}
         try:
-            r = requests.post(slack_webhook, data=json.dumps(dict(text=message)), headers=headers)
+            r = requests.post(slack_webhook, data=json.dumps(dict(text=message, username="SickRageBot")), headers=headers)
             r.raise_for_status()
         except Exception as e:
             logger.log("Error Sending Slack message: " + ex(e), logger.ERROR)

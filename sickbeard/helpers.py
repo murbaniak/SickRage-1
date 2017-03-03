@@ -19,7 +19,7 @@
 # along with SickRage. If not, see <http://www.gnu.org/licenses/>.
 # pylint:disable=too-many-lines
 
-from __future__ import unicode_literals
+from __future__ import print_function, unicode_literals
 
 import ast
 import base64
@@ -31,6 +31,7 @@ import operator
 import os
 import platform
 import random
+import rarfile
 import re
 import shutil
 import socket
@@ -38,7 +39,6 @@ import ssl
 import stat
 import time
 import traceback
-import urllib
 import uuid
 import xml.etree.ElementTree as ET
 import zipfile
@@ -51,6 +51,8 @@ import cfscrape
 import requests
 from cachecontrol import CacheControl
 from requests.utils import urlparse
+import six
+from six.moves import urllib
 
 import sickbeard
 from sickbeard import classes, db, logger
@@ -58,9 +60,6 @@ from sickbeard.common import USER_AGENT
 from sickrage.helper import MEDIA_EXTENSIONS, SUBTITLE_EXTENSIONS, episode_num, pretty_file_size
 from sickrage.helper.encoding import ek
 from sickrage.show.Show import Show
-
-
-
 
 
 # pylint: disable=protected-access
@@ -157,10 +156,12 @@ def remove_non_release_groups(name):
         r'- \[ www\.torrentday\.com \]$': 'searchre',
         r'^\[ www\.TorrentDay\.com \] - ': 'searchre',
         r'\[NO-RAR\] - \[ www\.torrentday\.com \]$': 'searchre',
+        r'^www\.Torrenting\.com\.-\.': 'searchre',
+        r'-Scrambled$': 'searchre'
     }
 
     _name = name
-    for remove_string, remove_type in removeWordsList.iteritems():
+    for remove_string, remove_type in six.iteritems(removeWordsList):
         if remove_type == 'search':
             _name = _name.replace(remove_string, '')
         elif remove_type == 'searchre':
@@ -169,7 +170,7 @@ def remove_non_release_groups(name):
     return _name
 
 
-def isMediaFile(filename):
+def is_media_file(filename):
     """
     Check if named file may contain media
 
@@ -179,11 +180,15 @@ def isMediaFile(filename):
 
     # ignore samples
     try:
+        assert isinstance(filename, six.string_types), type(filename)
+        is_rar = is_rar_file(filename)
+        filename = ek(os.path.basename, filename)
+
         if re.search(r'(^|[\W_])(?<!shomin.)(sample\d*)[\W_]', filename, re.I):
             return False
 
         # ignore RARBG release intro
-        if re.search(r'^RARBG\.\w+\.(mp4|avi|txt)$', filename, re.I):
+        if re.search(r'^RARBG\.(\w+\.)?(mp4|avi|txt)$', filename, re.I):
             return False
 
         # ignore MAC OS's retarded "resource fork" files
@@ -195,42 +200,28 @@ def isMediaFile(filename):
         if re.search('extras?$', filname_parts[0], re.I):
             return False
 
-        return filname_parts[-1].lower() in MEDIA_EXTENSIONS
-    except TypeError as error:  # Not a string
+        return filname_parts[-1].lower() in MEDIA_EXTENSIONS or (sickbeard.UNPACK == 2 and is_rar)
+    except (TypeError, AssertionError) as error:  # Not a string
         logger.log('Invalid filename. Filename must be a string. {0}'.format(error), logger.DEBUG)  # pylint: disable=no-member
         return False
 
 
-def isRarFile(filename):
+def is_rar_file(filename):
     """
     Check if file is a RAR file, or part of a RAR set
 
     :param filename: Filename to check
     :return: True if this is RAR/Part file, False if not
     """
-
     archive_regex = r'(?P<file>^(?P<base>(?:(?!\.part\d+\.rar$).)*)\.(?:(?:part0*1\.)?rar)$)'
+    ret = re.search(archive_regex, filename) is not None
+    try:
+        if ret and ek(os.path.exists, filename) and ek(os.path.isfile, filename):
+            ret = ek(rarfile.is_rarfile, filename)
+    except (IOError, OSError):
+        pass
 
-    if re.search(archive_regex, filename):
-        return True
-
-    return False
-
-
-def isBeingWritten(filepath):
-    """
-    Check if file has been written in last 60 seconds
-
-    :param filepath: Filename to check
-    :return: True if file has been written recently, False if none
-    """
-
-    # Return True if file was modified within 60 seconds. it might still be being written to.
-    ctime = max(ek(os.path.getctime, filepath), ek(os.path.getmtime, filepath))
-    if ctime > time.time() - 60:
-        return True
-
-    return False
+    return ret
 
 
 def remove_file_failed(failed_file):
@@ -318,7 +309,7 @@ def searchIndexerForShowID(regShowName, indexer=None, indexer_id=None, ui=None):
     return None, None, None
 
 
-def listMediaFiles(path):
+def list_media_files(path):
     """
     Get a list of files possibly containing media in a path
 
@@ -330,15 +321,15 @@ def listMediaFiles(path):
         return []
 
     files = []
-    for curFile in ek(os.listdir, path):
-        fullCurFile = ek(os.path.join, path, curFile)
+    for entry in ek(os.listdir, path):
+        full_entry = ek(os.path.join, path, entry)
 
         # if it's a folder do it recursively
-        if ek(os.path.isdir, fullCurFile) and not curFile.startswith('.') and not curFile == 'Extras':
-            files += listMediaFiles(fullCurFile)
+        if ek(os.path.isdir, full_entry) and not entry.startswith('.') and not entry == 'Extras':
+            files += list_media_files(full_entry)
 
-        elif isMediaFile(curFile):
-            files.append(fullCurFile)
+        elif is_media_file(entry):
+            files.append(full_entry)
 
     return files
 
@@ -389,14 +380,14 @@ def moveFile(srcFile, destFile):
 def link(src, dst):
     """
     Create a file link from source to destination.
-    TODO: Make this unicode proof
+    TODO: Make this six.text_type proof
 
     :param src: Source file
     :param dst: Destination file
     """
 
     if platform.system() == 'Windows':
-        if ctypes.windll.kernel32.CreateHardLinkW(ctypes.c_wchar_p(unicode(dst)), ctypes.c_wchar_p(unicode(src)), None) == 0:
+        if ctypes.windll.kernel32.CreateHardLinkW(ctypes.c_wchar_p(six.text_type(dst)), ctypes.c_wchar_p(six.text_type(src)), None) == 0:
             raise ctypes.WinError()
     else:
         ek(os.link, src, dst)
@@ -428,7 +419,7 @@ def symlink(src, dst):
     """
 
     if platform.system() == 'Windows':
-        if ctypes.windll.kernel32.CreateSymbolicLinkW(ctypes.c_wchar_p(unicode(dst)), ctypes.c_wchar_p(unicode(src)), 1 if ek(os.path.isdir, src) else 0) in [0, 1280]:
+        if ctypes.windll.kernel32.CreateSymbolicLinkW(ctypes.c_wchar_p(six.text_type(dst)), ctypes.c_wchar_p(six.text_type(src)), 1 if ek(os.path.isdir, src) else 0) in [0, 1280]:
             raise ctypes.WinError()
     else:
         ek(os.symlink, src, dst)
@@ -667,7 +658,7 @@ def fixSetGroupID(childPath):
         childPath_owner = childStat.st_uid  # pylint: disable=no-member
         user_id = os.geteuid()  # @UndefinedVariable - only available on UNIX
 
-        if user_id != 0 and user_id != childPath_owner:
+        if user_id not in (childPath_owner, 0):
             logger.log("Not running as root or owner of " + childPath + ", not trying to set the set-group-ID",
                        logger.DEBUG)
             return
@@ -824,7 +815,7 @@ def create_https_certificates(ssl_cert, ssl_key):
     # assert isinstance(ssl_cert, unicode)
 
     try:
-        from OpenSSL import crypto  # @UnresolvedImport
+        from OpenSSL import crypto  # noinspection PyUnresolvedReferences
         from certgen import createKeyPair, createCertRequest, createCertificate, TYPE_RSA, \
             serial  # @UnresolvedImport
     except Exception:
@@ -832,12 +823,12 @@ def create_https_certificates(ssl_cert, ssl_key):
         return False
 
     # Create the CA Certificate
-    cakey = createKeyPair(TYPE_RSA, 1024)
+    cakey = createKeyPair(TYPE_RSA, 4096)
     careq = createCertRequest(cakey, CN='Certificate Authority')
     cacert = createCertificate(careq, (careq, cakey), serial, (0, 60 * 60 * 24 * 365 * 10))  # ten years
 
     cname = 'SickRage'
-    pkey = createKeyPair(TYPE_RSA, 1024)
+    pkey = createKeyPair(TYPE_RSA, 4096)
     req = createCertRequest(pkey, CN=cname)
     cert = createCertificate(req, (cacert, cakey), serial, (0, 60 * 60 * 24 * 365 * 10))  # ten years
 
@@ -1077,14 +1068,14 @@ def is_hidden_folder(folder):
     """
     def is_hidden(filepath):
         name = ek(os.path.basename, ek(os.path.abspath, filepath))
-        return name.startswith('.') or has_hidden_attribute(filepath)
+        return name == '@eaDir' or name.startswith('.') or has_hidden_attribute(filepath)
 
     def has_hidden_attribute(filepath):
         try:
-            attrs = ctypes.windll.kernel32.GetFileAttributesW(ctypes.c_wchar_p(unicode(filepath)))
+            attrs = ctypes.windll.kernel32.GetFileAttributesW(ctypes.c_wchar_p(six.text_type(filepath)))
             assert attrs != -1
             result = bool(attrs & 2)
-        except (AttributeError, AssertionError):
+        except (AttributeError, AssertionError, OSError, IOError):
             result = False
         return result
 
@@ -1178,8 +1169,8 @@ def extractZip(archive, targetDir):
     """
     Unzip a file to a directory
 
-    :param fileList: A list of file names - full path each name
-    :param archive: The file name for the archive with a full path
+    :param archive: The file name of the archive to extract with a full path
+    :param targetDir: The full path to the extraction target directory
     """
 
     try:
@@ -1195,7 +1186,7 @@ def extractZip(archive, targetDir):
 
             # copy file (taken from zipfile's extract)
             source = zip_file.open(member)
-            target = file(ek(os.path.join, targetDir, filename), "wb")
+            target = open(ek(os.path.join, targetDir, filename), "wb")
             shutil.copyfileobj(source, target)
             source.close()
             target.close()
@@ -1206,7 +1197,7 @@ def extractZip(archive, targetDir):
         return False
 
 
-def backupConfigZip(fileList, archive, arcname=None):
+def backup_config_zip(fileList, archive, arcname=None):
     """
     Store the config file as a ZIP
 
@@ -1227,7 +1218,7 @@ def backupConfigZip(fileList, archive, arcname=None):
         return False
 
 
-def restoreConfigZip(archive, targetDir):
+def restore_config_zip(archive, targetDir):
     """
     Restores a Config ZIP file back in place
 
@@ -1374,12 +1365,12 @@ def getURL(url, post_data=None, params=None, headers=None,  # pylint:disable=too
 
         if params and isinstance(params, (list, dict)):
             for param in params:
-                if isinstance(params[param], unicode):
+                if isinstance(params[param], six.text_type):
                     params[param] = params[param].encode('utf-8')
 
         if post_data and isinstance(post_data, (list, dict)):
             for param in post_data:
-                if isinstance(post_data[param], unicode):
+                if isinstance(post_data[param], six.text_type):
                     post_data[param] = post_data[param].encode('utf-8')
 
         resp = session.request(
@@ -1532,7 +1523,7 @@ def generateCookieSecret():
 def disk_usage(path):
     if platform.system() == 'Windows':
         free = ctypes.c_ulonglong(0)
-        if ctypes.windll.kernel32.GetDiskFreeSpaceExW(ctypes.c_wchar_p(unicode(path)), None, None, ctypes.pointer(free)) == 0:
+        if ctypes.windll.kernel32.GetDiskFreeSpaceExW(ctypes.c_wchar_p(six.text_type(path)), None, None, ctypes.pointer(free)) == 0:
             raise ctypes.WinError()
         return free.value
 
@@ -1572,6 +1563,11 @@ def verify_freespace(src, dest, oldfile=None, method="copy"):
         logger.log("A path to a file is required for the source. {0} is not a file.".format(src), logger.WARNING)
         return True
 
+    if not (ek(os.path.exists, dest) or ek(os.path.exists, ek(os.path.dirname, dest))):
+        logger.log("A path is required for the destination. Check the root dir and show locations are correct for {0} (I got '{1}')".format(
+            oldfile[0].name, dest), logger.WARNING)
+        return False
+
     # shortcut: if we are moving the file and the destination == src dir,
     # then by definition there is enough space
     if method == "move" and ek(os.stat, src).st_dev == ek(os.stat, dest if ek(os.path.exists, dest) else ek(os.path.dirname, dest)).st_dev:  # pylint: disable=no-member
@@ -1579,7 +1575,7 @@ def verify_freespace(src, dest, oldfile=None, method="copy"):
         return True
 
     try:
-        diskfree = disk_usage(dest if ek(os.path.exists, dest) else ek(os.path.dirname, dest))
+        disk_free = disk_usage(dest if ek(os.path.exists, dest) else ek(os.path.dirname, dest))
     except Exception as error:
         logger.log("Unable to determine free space, so I will assume there is enough.", logger.WARNING)
         logger.log("Error: {error}".format(error=error), logger.DEBUG)
@@ -1587,25 +1583,25 @@ def verify_freespace(src, dest, oldfile=None, method="copy"):
         return True
 
     # Lets also do this for symlink and hardlink
-    if 'link' in method and diskfree > 1024**2:
+    if 'link' in method and disk_free > 1024**2:
         return True
 
-    neededspace = ek(os.path.getsize, src)
+    needed_space = ek(os.path.getsize, src)
 
     if oldfile:
         for f in oldfile:
             if ek(os.path.isfile, f.location):
-                diskfree += ek(os.path.getsize, f.location)
+                disk_free += ek(os.path.getsize, f.location)
 
-    if diskfree > neededspace:
+    if disk_free > needed_space:
         return True
     else:
         logger.log("Not enough free space: Needed: {0} bytes ( {1} ), found: {2} bytes ( {3} )".format
-                   (neededspace, pretty_file_size(neededspace), diskfree, pretty_file_size(diskfree)), logger.WARNING)
+                   (needed_space, pretty_file_size(needed_space), disk_free, pretty_file_size(disk_free)), logger.WARNING)
         return False
 
 
-def getDiskSpaceUsage(diskPath=None):
+def disk_usage_hr(diskPath=None):
     """
     returns the free space in human readable bytes for a given path or False if no path given
     :param diskPath: the filesystem path being checked
@@ -1644,7 +1640,7 @@ def pretty_time_delta(seconds):
     return time_delta
 
 
-def isFileLocked(checkfile, writeLockCheck=False):
+def is_file_locked(checkfile, write_check=False):
     """
     Checks to see if a file is locked. Performs three checks
         1. Checks if the file even exists
@@ -1653,8 +1649,8 @@ def isFileLocked(checkfile, writeLockCheck=False):
         3. If the readLockCheck parameter is True, attempts to rename the file. If this fails the
             file is open by some other process for reading. The file can be read, but not written to
             or deleted.
-    :param file: the file being checked
-    :param writeLockCheck: when true will check if the file is locked for writing (prevents move operations)
+    :param checkfile: the file being checked
+    :param write_check: when true will check if the file is locked for writing (prevents move operations)
     """
 
     checkfile = ek(os.path.abspath, checkfile)
@@ -1667,7 +1663,7 @@ def isFileLocked(checkfile, writeLockCheck=False):
     except IOError:
         return True
 
-    if writeLockCheck:
+    if write_check:
         lockFile = checkfile + ".lckchk"
         if ek(os.path.exists, lockFile):
             ek(os.remove, lockFile)
@@ -1681,7 +1677,7 @@ def isFileLocked(checkfile, writeLockCheck=False):
     return False
 
 
-def getTVDBFromID(indexer_id, indexer):  # pylint:disable=too-many-return-statements
+def tvdbid_from_remote_id(indexer_id, indexer):  # pylint:disable=too-many-return-statements
 
     session = make_session()
     tvdb_id = ''
@@ -1745,3 +1741,55 @@ def is_ip_private(ip):
     priv_20 = re.compile(r"^192\.168\.\d{1,3}.\d{1,3}$")
     priv_16 = re.compile(r"^172.(1[6-9]|2[0-9]|3[0-1]).[0-9]{1,3}.[0-9]{1,3}$")
     return priv_lo.match(ip) or priv_24.match(ip) or priv_20.match(ip) or priv_16.match(ip)
+
+
+def recursive_listdir(path):
+    for directory_path, directory_names, file_names in ek(os.walk, path, topdown=False):
+        for filename in file_names:
+            yield ek(os.path.join, directory_path, filename)
+
+
+MESSAGE_COUNTER = 0
+
+
+def add_site_message(message, level='danger'):
+    with sickbeard.MESSAGES_LOCK:
+        to_add = dict(level=level, message=message)
+
+        basic_update_url = sickbeard.versionChecker.UpdateManager.get_update_url().split('?')[0]
+        for index, existing in six.iteritems(sickbeard.SITE_MESSAGES):
+            if basic_update_url in existing['message'] and basic_update_url in message:
+                sickbeard.SITE_MESSAGES[index] = to_add
+                return
+
+            if message.endswith('Please use \'master\' unless specifically asked') and \
+                    existing['message'].endswith('Please use \'master\' unless specifically asked'):
+                sickbeard.SITE_MESSAGES[index] = to_add
+                return
+
+            if message.startswith('No NZB/Torrent providers found or enabled for') and \
+                    existing['message'].startswith('No NZB/Torrent providers found or enabled for'):
+                sickbeard.SITE_MESSAGES[index] = to_add
+                return
+
+        global MESSAGE_COUNTER
+        MESSAGE_COUNTER += 1
+        sickbeard.SITE_MESSAGES[MESSAGE_COUNTER] = to_add
+
+
+def remove_site_message(begins='', ends='', contains='', key=None):
+    with sickbeard.MESSAGES_LOCK:
+        if key is not None and int(key) in sickbeard.SITE_MESSAGES:
+            del sickbeard.SITE_MESSAGES[int(key)]
+
+        for index, existing in six.iteritems(sickbeard.SITE_MESSAGES.copy()):
+            checks = []
+            if begins and isinstance(begins, six.string_types):
+                checks.append(existing['message'].startswith(begins))
+            if ends and isinstance(ends, six.string_types):
+                checks.append(existing['message'].endsswith(ends))
+            if contains and isinstance(ends, six.string_types):
+                checks.append(contains in existing['message'])
+
+            if all(checks):
+                del sickbeard.SITE_MESSAGES[index]
