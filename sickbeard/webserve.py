@@ -1,6 +1,6 @@
 # coding=utf-8
 # Author: Nic Wolfe <nic@wolfeden.ca>
-# URL: http://code.google.com/p/sickbeard/
+# URL: https://sickrage.github.io
 #
 # This file is part of SickRage.
 #
@@ -307,8 +307,7 @@ class LoginHandler(BaseHandler):
         if self.get_argument('username', '') == username and self.get_argument('password', '') == password:
             api_key = sickbeard.API_KEY
 
-        if sickbeard.NOTIFY_ON_LOGIN and not helpers.is_ip_private(self.request.remote_ip):
-            notifiers.notify_login(self.request.remote_ip)
+        notifiers.notify_login(self.request.remote_ip)
 
         if api_key:
             remember_me = try_int(self.get_argument('remember_me', default=0), 0)
@@ -624,7 +623,7 @@ class UI(WebRoot):
 
     def dismiss_site_message(self, index):
         self.set_header('Cache-Control', 'max-age=0,no-cache,no-store')
-        helpers.remove_site_message(index)
+        helpers.remove_site_message(key=index)
         return sickbeard.SITE_MESSAGES
 
     def sickrage_background(self):
@@ -766,7 +765,7 @@ class Home(WebRoot):
         if not callback and jq_obj:
             return _("Error: Unsupported Request. Send jsonp request with 'callback' variable in the query string.")
 
-        # self.set_header('Cache-Control', 'max-age=0,no-cache,no-store')
+        self.set_header('Cache-Control', 'max-age=0,no-cache,no-store')
         self.set_header('Content-Type', 'text/javascript')
         self.set_header('Access-Control-Allow-Origin', '*')
         self.set_header('Access-Control-Allow-Headers', 'x-requested-with')
@@ -2109,26 +2108,25 @@ class Home(WebRoot):
         episodes = []
 
         # Queued Searches
-        searchstatus = 'queued'
+        searchstatus = 'Queued'
         for searchThread in sickbeard.searchQueueScheduler.action.get_all_ep_from_queue(show):
             episodes += getEpisodes(searchThread, searchstatus)
 
         # Running Searches
-        searchstatus = 'searching'
+        searchstatus = 'Searching'
         if sickbeard.searchQueueScheduler.action.is_manualsearch_in_progress():
             searchThread = sickbeard.searchQueueScheduler.action.currentItem
 
             if searchThread.success:
-                searchstatus = 'finished'
+                searchstatus = 'Finished'
 
             episodes += getEpisodes(searchThread, searchstatus)
 
         # Finished Searches
-        searchstatus = 'finished'
+        searchstatus = 'Finished'
         for searchThread in sickbeard.search_queue.MANUAL_SEARCH_HISTORY:
-            if not show:
-                if not str(searchThread.show.indexerid) == show:
-                    continue
+            if show and str(searchThread.show.indexerid) != show:
+                continue
 
             if isinstance(searchThread, sickbeard.search_queue.ManualSearchQueueItem):
                 if not [x for x in episodes if x['episodeindexid'] == searchThread.segment.indexerid]:
@@ -2761,8 +2759,8 @@ class HomeAddShows(Home):
             configure_show_options=None):
 
         if indexer != "TVDB":
-            tvdb_id = helpers.tvdbid_from_remote_id(indexer_id, indexer.upper())
-            if not tvdb_id:
+            indexer_id = helpers.tvdbid_from_remote_id(indexer_id, indexer.upper())
+            if not indexer_id:
                 logger.log("Unable to to find tvdb ID to add {0}".format(show_name))
                 ui.notifications.error(
                     "Unable to add {0}".format(show_name),
@@ -2770,9 +2768,9 @@ class HomeAddShows(Home):
                 )
                 return
 
-            indexer_id = try_int(tvdb_id, None)
+        indexer_id = try_int(indexer_id)
 
-        if Show.find(sickbeard.showList, int(indexer_id)):
+        if indexer_id <= 0 or Show.find(sickbeard.showList, indexer_id):
             return
 
         # Sanitize the parameter anyQualities and bestQualities. As these would normally be passed as lists
@@ -2831,9 +2829,11 @@ class HomeAddShows(Home):
         show_dir = None
 
         # add the show
-        sickbeard.showQueueScheduler.action.addShow(1, int(indexer_id), show_dir, int(default_status), quality, season_folders,
-                                                    indexer_lang, subtitles, anime, scene, None, blacklist, whitelist,
-                                                    int(default_status_after), root_dir=location)
+        sickbeard.showQueueScheduler.action.addShow(
+            indexer=1, indexer_id=indexer_id, showDir=show_dir, default_status=default_status, quality=quality,
+            season_folders=season_folders, lang=indexer_lang, subtitles=subtitles, subtitles_sr_metadata=None,
+            anime=anime, scene=scene, paused=None, blacklist=blacklist, whitelist=whitelist,
+            default_status_after=default_status_after, root_dir=location)
 
         ui.notifications.message(_('Show added'), _('Adding the specified show {show_name}').format(show_name=show_name))
 
@@ -2949,9 +2949,11 @@ class HomeAddShows(Home):
         newQuality = Quality.combineQualities([int(q) for q in anyQualities], [int(q) for q in bestQualities])
 
         # add the show
-        sickbeard.showQueueScheduler.action.addShow(indexer, indexer_id, show_dir, int(defaultStatus), newQuality,
-                                                    season_folders, indexerLang, subtitles, subtitles_sr_metadata,
-                                                    anime, scene, None, blacklist, whitelist, int(defaultStatusAfter))
+        sickbeard.showQueueScheduler.action.addShow(
+            indexer, indexer_id, showDir=show_dir, default_status=int(defaultStatus), quality=newQuality,
+            season_folders=season_folders, lang=indexerLang, subtitles=subtitles, subtitles_sr_metadata=subtitles_sr_metadata,
+            anime=anime, scene=scene, paused=None, blacklist=blacklist, whitelist=whitelist,
+            default_status_after=int(defaultStatusAfter), root_dir=None)
         ui.notifications.message(_('Show added'), _('Adding the specified show into {show_dir}').format(show_dir=show_dir))
 
         return finishAddShow()
@@ -4282,8 +4284,7 @@ class ConfigPostProcessing(Config):
         config.change_process_automatically(process_automatically)
         sickbeard.USE_ICACLS = config.checkbox_to_value(use_icacls)
 
-        sickbeard.UNRAR_TOOL= rarfile.ORIG_UNRAR_TOOL = rarfile.UNRAR_TOOL = unrar_tool
-        sickbeard.ALT_UNRAR_TOOL = rarfile.ALT_TOOL = alt_unrar_tool
+        config.change_unrar_tool(unrar_tool, alt_unrar_tool)
 
         unpack = try_int(unpack)
         if unpack == 1:
@@ -4294,7 +4295,7 @@ class ConfigPostProcessing(Config):
             sickbeard.UNPACK = unpack
 
         if not config.change_unpack_dir(unpack_dir):
-            results += ["Unable to create directory " + ek(os.path.normpath, unpack_dir) + ", dir not changed."]
+            results += ["Unable to change unpack directory to " + ek(os.path.normpath, unpack_dir) + ", check the logs."]
 
         sickbeard.NO_DELETE = config.checkbox_to_value(no_delete)
         sickbeard.KEEP_PROCESSED_DIR = config.checkbox_to_value(keep_processed_dir)
@@ -4434,24 +4435,9 @@ class ConfigPostProcessing(Config):
     @staticmethod
     def isRarSupported():
         """
-        Test Packing Support:
-            - Simulating in memory rar extraction on test.rar file
+        Test Unpacking Support: - checks if unrar is installed and accesible
         """
-        check = None
-        # noinspection PyBroadException
-        try:
-            # noinspection PyProtectedMember
-            check = rarfile._check_unrar_tool()
-        except Exception:
-            # noinspection PyBroadException
-            try:
-                if platform.system() in ('Windows', 'Microsoft') and ek(os.path.isfile, 'C:\\Program Files\\WinRar\\UnRar.exe'):
-                    sickbeard.UNRAR_TOOL = rarfile.ORIG_UNRAR_TOOL = rarfile.UNRAR_TOOL = 'C:\\Program Files\\WinRar\\UnRar.exe'
-                    # noinspection PyProtectedMember
-                    check = rarfile._check_unrar_tool()
-            except Exception:
-                pass
-
+        check = config.change_unrar_tool(sickbeard.UNRAR_TOOL, sickbeard.ALT_UNRAR_TOOL)
         if not check:
             logger.log('Looks like unrar is not installed, check failed', logger.WARNING)
         return ('not supported', 'supported')[check]

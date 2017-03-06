@@ -40,7 +40,7 @@ import stat
 import time
 import traceback
 import uuid
-import xml.etree.ElementTree as ET
+import xml.etree.ElementTree as ElementTree
 import zipfile
 from contextlib import closing
 from itertools import cycle, izip
@@ -52,6 +52,8 @@ import requests
 from cachecontrol import CacheControl
 from requests.utils import urlparse
 import six
+
+# noinspection PyUnresolvedReferences
 from six.moves import urllib
 
 import sickbeard
@@ -1085,12 +1087,26 @@ def is_hidden_folder(folder):
 
     return False
 
-
 def real_path(path):
     """
     Returns: the canonicalized absolute pathname. The resulting path will have no symbolic link, '/./' or '/../' components.
     """
     return ek(os.path.normpath, ek(os.path.normcase, ek(os.path.realpath, path)))
+
+def is_subdirectory(subdir_path, topdir_path):
+    """
+    Returns true if a subdir_path is a subdirectory of topdir_path
+    else otherwise.
+
+    :param subdir_path: The full path to the sub-directory
+    :param topdir_path: The full path to the top directory to check subdir_path against
+    """
+    topdir_path = real_path(topdir_path)
+    subdir_path = real_path(subdir_path)
+
+    # checks if the common prefix of both is equal to directory
+    # e.g. /a/b/c/d.rst and directory is /a/b, the common prefix is /a/b
+    return os.path.commonprefix([subdir_path, topdir_path]) == topdir_path
 
 
 def validateShow(show, season=None, episode=None):
@@ -1363,15 +1379,44 @@ def getURL(url, post_data=None, params=None, headers=None,  # pylint:disable=too
 
         hooks, cookies, verify, proxies = request_defaults(kwargs)
 
-        if params and isinstance(params, (list, dict)):
-            for param in params:
-                if isinstance(params[param], six.text_type):
-                    params[param] = params[param].encode('utf-8')
+        # Dict, loop through and change all key,value pairs to bytes
+        if isinstance(params, dict):
+            for key, value in six.iteritems(params):
+                if isinstance(key, six.text_type):
+                    del params[key]
+                    key = key.encode('utf-8')
 
-        if post_data and isinstance(post_data, (list, dict)):
-            for param in post_data:
-                if isinstance(post_data[param], six.text_type):
-                    post_data[param] = post_data[param].encode('utf-8')
+                if isinstance(value, six.text_type):
+                    value = value.encode('utf-8')
+                params[key] = value
+
+        if isinstance(post_data, dict):
+            for key, value in six.iteritems(post_data):
+                if isinstance(key, six.text_type):
+                    del post_data[key]
+                    key = key.encode('utf-8')
+
+                if isinstance(value, six.text_type):
+                    value = value.encode('utf-8')
+                post_data[key] = value
+
+        # List, loop through and change all indexes to bytes
+        if isinstance(params, list):
+            for index, value in enumerate(params):
+                if isinstance(value, six.text_type):
+                    params[index] = value.encode('utf-8')
+
+        if isinstance(post_data, list):
+            for index, value in enumerate(post_data):
+                if isinstance(value, six.text_type):
+                    post_data[index] = value.encode('utf-8')
+
+        # Unicode, encode to bytes
+        if isinstance(params, six.text_type):
+            params = params.encode('utf-8')
+
+        if isinstance(post_data, six.text_type):
+            post_data = post_data.encode('utf-8')
 
         resp = session.request(
             'POST' if post_data else 'GET', url, data=post_data or {}, params=params or {},
@@ -1687,7 +1732,7 @@ def tvdbid_from_remote_id(indexer_id, indexer):  # pylint:disable=too-many-retur
         if data is None:
             return tvdb_id
         try:
-            tree = ET.fromstring(data)
+            tree = ElementTree.fromstring(data)
             for show in tree.getiterator("Series"):
                 tvdb_id = show.findtext("seriesid")
 
@@ -1701,7 +1746,7 @@ def tvdbid_from_remote_id(indexer_id, indexer):  # pylint:disable=too-many-retur
         if data is None:
             return tvdb_id
         try:
-            tree = ET.fromstring(data)
+            tree = ElementTree.fromstring(data)
             for show in tree.getiterator("Series"):
                 tvdb_id = show.findtext("seriesid")
 

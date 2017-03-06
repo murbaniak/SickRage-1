@@ -223,6 +223,18 @@ var SICKRAGE = {
                     $(this).prop('checked', $(bulkCheck).prop('checked'));
                 });
             });
+
+            $(".enabler").each(function(){
+                if (!$(this).prop('checked')) { $('#content_'+$(this).attr('id')).hide(); }
+            });
+
+            $(".enabler").on('change', function() {
+                if ($(this).prop('checked')){
+                    $('#content_'+$(this).attr('id')).fadeIn("fast", "linear");
+                } else {
+                    $('#content_'+$(this).attr('id')).fadeOut("fast", "linear");
+                }
+            });
         },
         QualityChooser: {
             setFromPresets: function (preset) {
@@ -285,18 +297,6 @@ var SICKRAGE = {
     config: {
         init: function() {
             $('#config-components').tabs();
-
-            $(".enabler").each(function(){
-                if (!$(this).prop('checked')) { $('#content_'+$(this).attr('id')).hide(); }
-            });
-
-            $(".enabler").on('click', function() {
-                if ($(this).prop('checked')){
-                    $('#content_'+$(this).attr('id')).fadeIn("fast", "linear");
-                } else {
-                    $('#content_'+$(this).attr('id')).fadeOut("fast", "linear");
-                }
-            });
 
             $(".viewIf").on('click', function() {
                 if ($(this).prop('checked')) {
@@ -2197,7 +2197,7 @@ var SICKRAGE = {
                     4: function(node) { return $(node).find("span").text().toLowerCase(); },
                     5: function(node) { return $(node).find("span:first").text(); },
                     6: function(node) { return $(node).data('show-size'); },
-                    7: function(node) { return $(node).find("img").attr("alt"); }
+                    7: function(node) { return $(node).find("span").attr("title").toLowerCase(); }
                 },
                 widgets: ['saveSort', 'zebra', 'stickyHeaders', 'filter', 'columnSelector'],
                 headers: {
@@ -2402,8 +2402,83 @@ var SICKRAGE = {
             });
 
             $('#srRoot').ajaxEpSearch({'colorRow': true});
-            $('#srRoot').ajaxEpSubtitlesSearch();
-            $('#srRoot').ajaxRetrySubtitlesSearch();
+
+            function enableLink(link) {
+                link.on('click.disabled', false);
+                link.prop('enableClick', '1');
+                link.fadeTo("fast", 1);
+            }
+
+            function disableLink(link) {
+                link.off('click.disabled');
+                link.prop('enableClick', '0');
+                link.fadeTo("fast", 0.5);
+            }
+
+            $('.epSubtitlesSearch').on("click", function() {
+                if ($(this).prop('enableClick') === '0') { return false; }
+                disableLink($(this));
+
+                var parent = $(this).parent();
+                var subtitlesTd = parent.siblings('.col-subtitles');
+
+                var icon = $(this).children('span');
+                icon.prop('class', 'loading-spinner16');
+                icon.prop('title', 'Searching');
+
+                $.getJSON($(this).attr('href'), function(data) {
+                    if (data.result.toLowerCase() !== "failure" && data.result.toLowerCase() !== "no subtitles downloaded") {
+                        // clear and update the subtitles column with new information
+                        var subtitles = data.subtitles.split(',');
+                        subtitlesTd.empty();
+                        $.each(subtitles, function(index, language) {
+                            if (language !== "") {
+                                subtitlesTd.append($("<img/>").attr({"src": srRoot+"/images/subtitles/flags/"+language+".png", "alt": language, "width": 16, "height": 11}));
+                            }
+                        });
+                        icon.prop('class', 'displayshow-icon-sub');
+                        enableLink($(this));
+                    } else {
+                        icon.prop('class', 'displayshow-icon-disable');
+                    }
+                    icon.prop('title', data.result);
+                });
+                return false;
+            });
+
+            $('.epRetrySubtitlesSearch').on('click', function() {
+                if ($(this).prop('enableClick') === '0') { return false; }
+
+                var selectedEpisode = $(this);
+                var subtitleModal = $("#confirmSubtitleDownloadModal");
+
+                $('#confirmSubtitleDownloadModal .btn.btn-success').on('click', function() {
+                    disableLink(selectedEpisode);
+                    subtitleModal.modal('hide');
+
+                    var img = selectedEpisode.children('img');
+                    img.hide();
+
+                    selectedEpisode.append($("<span/>").attr({"class": 'loading-spinner16', "title": "Searching"}));
+                    var icon = selectedEpisode.children('span');
+
+                    $.getJSON(selectedEpisode.prop('href'), function(data) {
+                        if (data.result.toLowerCase() === 'failure') {
+                            icon.prop('class', 'displayshow-icon-disable');
+                            icon.prop('title', 'Failed');
+                        } else {
+                            img.prop('title', 'Success');
+                            img.prop('alt', 'Success');
+                            icon.hide();
+                            img.show();
+                        }
+                    });
+                    enableLink(selectedEpisode);
+                    return false;
+                });
+                subtitleModal.modal('show');
+                return false;
+            });
 
             $('#seasonJump').on('change', function(){
                 var id = $('#seasonJump option:selected').val();
@@ -2797,28 +2872,33 @@ var SICKRAGE = {
         },
         restart: function(){
             var currentPid = srPID;
-            var checkIsAlive = setInterval(function(){
-                $.post(srRoot + '/home/is_alive/', function(data) {
-                    if (data.msg.toLowerCase() === 'nope') {
-                        // if it's still initializing then just wait and try again
+            var checkIsAlive = setInterval(function() {
+                $.post(srRoot + '/home/is-alive/', function(data) {
+                    if (data === undefined || data.msg !== currentPid) {
                         $('#restart_message').show();
-                    } else {
-                        // if this is before we've even shut down then just try again later
-                        if (currentPid === '' || data.msg === currentPid) {
-                            $('#shut_down_loading').hide();
-                            $('#shut_down_success').show();
-                            currentPid = data.msg;
-                        } else {
-                            clearInterval(checkIsAlive);
-                            $('#restart_loading').hide();
-                            $('#restart_success').show();
-                            $('#refresh_message').show();
-                            setTimeout(function(){
-                                window.location = srRoot + '/' + srDefaultPage + '/';
-                            }, 5000);
-                        }
+                        $('#shut_down_loading').hide();
+                        $('#shut_down_success').show();
                     }
-                }, 'jsonp');
+                    if (data !== undefined && data.msg !== 'nope' && data.msg !== currentPid) {
+                        clearInterval(checkIsAlive);
+                        $('#restart_loading').hide();
+                        $('#restart_success').show();
+                        $('#refresh_message').show();
+                        srPID = currentPid = data.msg;
+                        checkIsAlive = setInterval(function() {
+                            $.post(srRoot + '/home/is-alive/', function() {
+                                clearInterval(checkIsAlive);
+                                setTimeout(function(){
+                                    window.location = srRoot + '/' + srDefaultPage + '/';
+                                }, 2000);
+                            }, 'jsonp');
+                        }, 100);
+                    }
+                }, 'jsonp').fail(function() {
+                    $('#restart_message').show();
+                    $('#shut_down_loading').hide();
+                    $('#shut_down_success').show();
+                });
             }, 100);
         }
     },
@@ -2868,12 +2948,12 @@ var SICKRAGE = {
                 textExtraction: {
                     2: function(node) { return ($(node).find("img").attr("alt") || 'unknown').toLowerCase(); },  // Network
                     3: function(node) { return $(node).find("span").attr("title").toLowerCase(); },  // Quality
-                    4: function(node) { return $(node).find("img").attr("alt").toLowerCase(); },  // Sports
-                    5: function(node) { return $(node).find("img").attr("alt").toLowerCase(); },  // Scene
-                    6: function(node) { return $(node).find("img").attr("alt").toLowerCase(); },  // Anime
-                    7: function(node) { return $(node).find("img").attr("alt").toLowerCase(); },  // Season Folders
-                    8: function(node) { return $(node).find("img").attr("alt").toLowerCase(); },  // Paused
-                    9: function(node) { return $(node).find("img").attr("alt").toLowerCase(); },  // Subtitle
+                    4: function(node) { return $(node).find("span").attr("title").toLowerCase(); },  // Sports
+                    5: function(node) { return $(node).find("span").attr("title").toLowerCase(); },  // Scene
+                    6: function(node) { return $(node).find("span").attr("title").toLowerCase(); },  // Anime
+                    7: function(node) { return $(node).find("span").attr("title").toLowerCase(); },  // Season Folders
+                    8: function(node) { return $(node).find("span").attr("title").toLowerCase(); },  // Paused
+                    9: function(node) { return $(node).find("span").attr("title").toLowerCase(); },  // Subtitle
                     10: function(node) { return $(node).text().toLowerCase(); },  // Default Episode Status
                     11: function(node) { return $(node).text().toLowerCase(); }  // Show Status
                 },
@@ -3315,7 +3395,7 @@ var SICKRAGE = {
             }
 
             if(isMeta('sickbeard.COMING_EPS_LAYOUT', ['banner', 'poster'])){
-                $('#srRoot').ajaxEpSearch({'size': 16, 'loadingImage': 'loading16' + themeSpinner + '.gif'});
+                $('#srRoot').ajaxEpSearch();
                 $('.ep_summary').hide();
                 $('.ep_summaryTrigger').click(function() {
                     $(this).next('.ep_summary').slideToggle('normal', function() {

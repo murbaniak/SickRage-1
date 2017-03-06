@@ -1,6 +1,6 @@
 # coding=utf-8
 # Author: Nic Wolfe <nic@wolfeden.ca>
-# URL: http://code.google.com/p/sickbeard/
+# URL: https://sickrage.github.io
 #
 # This file is part of SickRage.
 #
@@ -66,10 +66,6 @@ from sickbeard.common import NAMING_DUPLICATE, NAMING_EXTEND, NAMING_LIMITED_EXT
     NAMING_LIMITED_EXTEND_E_PREFIXED
 
 import shutil
-
-
-
-
 import six
 
 
@@ -1406,7 +1402,6 @@ class TVEpisode(object):  # pylint: disable=too-many-instance-attributes, too-ma
             self.saveToDB()
 
     def download_subtitles(self, force=False, force_lang=None):
-        force_ = force
         if not ek(os.path.isfile, self.location):
             logger.log("{id}: Episode file doesn't exist, can't download subtitles for {ep}".format
                        (id=self.show.indexerid, ep=episode_num(self.season, self.episode)),
@@ -2335,7 +2330,7 @@ class TVEpisode(object):  # pylint: disable=too-many-instance-attributes, too-ma
                             ep_string += '-' + "{#:03d}".format(**{"#": relEp.episode})
 
             regex_replacement = None
-            if anime_type == 2:
+            if anime_type == 2 and not ep_only_match:
                 regex_replacement = r'\g<pre_sep>' + ep_string + r'\g<post_sep>'
             elif season_ep_match:
                 regex_replacement = r'\g<pre_sep>\g<2>\g<3>' + ep_string + r'\g<post_sep>'

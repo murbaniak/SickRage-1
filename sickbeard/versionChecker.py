@@ -1,6 +1,6 @@
 # coding=utf-8
 # Author: Nic Wolfe <nic@wolfeden.ca>
-# URL: http://code.google.com/p/sickbeard/
+# URL: https://sickrage.github.io
 #
 # This file is part of SickRage.
 #
@@ -34,7 +34,6 @@ import sickbeard
 from sickbeard import db, helpers, logger, notifiers, ui
 from sickrage.helper.encoding import ek
 from sickrage.helper.exceptions import ex
-
 
 import six
 
@@ -660,11 +659,8 @@ class GitUpdateManager(UpdateManager):
         return []
 
     def update_remote_origin(self):
-        self._run_git(self._git_path, 'config remote.{0}.url {1}'.format(sickbeard.GIT_REMOTE, sickbeard.GIT_REMOTE_URL))
-        if sickbeard.GIT_USERNAME:
-            self._run_git(self._git_path, 'config remote.{0}.pushurl {1} --replace-all'.format(
-                sickbeard.GIT_REMOTE, sickbeard.GIT_REMOTE_URL.replace(sickbeard.GIT_ORG, sickbeard.GIT_USERNAME, 1)
-            ))
+        if not sickbeard.DEVELOPER:
+            self._run_git(self._git_path, 'config remote.{0}.url {1}'.format(sickbeard.GIT_REMOTE, sickbeard.GIT_REMOTE_URL))
 
 
 class SourceUpdateManager(UpdateManager):

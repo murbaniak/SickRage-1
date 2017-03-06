@@ -1,7 +1,7 @@
 # coding=utf-8
 
 # Author: Nic Wolfe <nic@wolfeden.ca>
-# URL: http://code.google.com/p/sickbeard/
+# URL: https://sickrage.github.io
 #
 # This file is part of SickRage.
 #
@@ -47,6 +47,11 @@ class Notifier(object):
     def notify_subtitle_download(self, ep_name, lang):
         if sickbeard.TWILIO_NOTIFY_ONSUBTITLEDOWNLOAD:
             self._notifyTwilio(common.notifyStrings[common.NOTIFY_SUBTITLE_DOWNLOAD] + ' ' + ep_name + ': ' + lang)
+
+    def notify_git_update(self, new_version):
+        if sickbeard.USE_TWILIO:
+            update_text = common.notifyStrings[common.NOTIFY_GIT_UPDATE_TEXT]
+            self._notifyTwilio(update_text + new_version)
 
     def notify_login(self, ipaddress=""):
         if sickbeard.USE_TWILIO:
