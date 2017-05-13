@@ -216,6 +216,29 @@ def change_sickrage_background(background):
     return True
 
 
+def change_custom_css(new_css):
+    """
+    Replace custom css file path
+
+    :param new_css: path to the new css file
+    :return: True on success, False on failure
+    """
+    if not new_css:
+        sickbeard.CUSTOM_CSS_PATH = ''
+        return True
+
+    new_css = ek(os.path.normpath, new_css)
+    if not ek(os.path.isfile, new_css):
+        logger.log("Custom css file does not exist: {0}".format(new_css))
+        return False
+    if not new_css.endswith('css'):
+        logger.log("Custom css file should have the .css extension: {0}".format(new_css))
+        return False
+
+    sickbeard.CUSTOM_CSS_PATH = new_css
+    return True
+
+
 def change_log_dir(log_dir, web_log):
     """
     Change logging directory for application and webserver
@@ -439,7 +462,6 @@ def change_version_notify(version_notify):
             sickbeard.versionCheckScheduler.silent = False
             sickbeard.versionCheckScheduler.enable = True
             sickbeard.versionCheckScheduler.forceRun()
-
     else:
         sickbeard.versionCheckScheduler.enable = False
         sickbeard.versionCheckScheduler.silent = True
@@ -465,7 +487,6 @@ def change_download_propers(download_propers):
             logger.log("Starting PROPERFINDER thread", logger.INFO)
             sickbeard.properFinderScheduler.silent = False
             sickbeard.properFinderScheduler.enable = True
-
     else:
         sickbeard.properFinderScheduler.enable = False
         sickbeard.properFinderScheduler.silent = True
@@ -491,7 +512,6 @@ def change_use_trakt(use_trakt):
             logger.log("Starting TRAKTCHECKER thread", logger.INFO)
             sickbeard.traktCheckerScheduler.silent = False
             sickbeard.traktCheckerScheduler.enable = True
-
     else:
         sickbeard.traktCheckerScheduler.enable = False
         sickbeard.traktCheckerScheduler.silent = True
@@ -517,7 +537,6 @@ def change_use_subtitles(use_subtitles):
             logger.log("Starting SUBTITLESFINDER thread", logger.INFO)
             sickbeard.subtitlesFinderScheduler.silent = False
             sickbeard.subtitlesFinderScheduler.enable = True
-
     else:
         sickbeard.subtitlesFinderScheduler.enable = False
         sickbeard.subtitlesFinderScheduler.silent = True
@@ -543,7 +562,6 @@ def change_process_automatically(process_automatically):
             logger.log("Starting POSTPROCESSOR thread", logger.INFO)
             sickbeard.autoPostProcessorScheduler.silent = False
             sickbeard.autoPostProcessorScheduler.enable = True
-
     else:
         logger.log("Stopping POSTPROCESSOR thread", logger.INFO)
         sickbeard.autoPostProcessorScheduler.enable = False

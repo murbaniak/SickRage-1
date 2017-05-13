@@ -37,6 +37,7 @@ from sickbeard import classes, db, helpers, image_cache, logger, network_timezon
 from sickbeard.common import ARCHIVED, DOWNLOADED, FAILED, IGNORED, Overview, Quality, SKIPPED, SNATCHED, \
     SNATCHED_PROPER, UNAIRED, UNKNOWN, WANTED, statusStrings
 from sickbeard.versionChecker import CheckVersion
+from sickbeard.postProcessor import PROCESS_METHODS
 from sickrage.helper.common import dateFormat, dateTimeFormat, pretty_file_size, sanitize_filename, timeFormat, try_int
 from sickrage.helper.encoding import ek
 from sickrage.helper.exceptions import CantUpdateShowException, ShowDirectoryNotFoundException, ex
@@ -1311,7 +1312,7 @@ class CMDPostProcess(ApiCall):
         self.force_next, args = self.check_params(args, kwargs, "force_next", False, False, "bool", [])
         self.return_data, args = self.check_params(args, kwargs, "return_data", False, False, "bool", [])
         self.process_method, args = self.check_params(args, kwargs, "process_method", False, False, "string",
-                                                      ["copy", "symlink", "hardlink", "move"])
+                                                      PROCESS_METHODS)
         self.is_priority, args = self.check_params(args, kwargs, "is_priority", False, False, "bool", [])
         self.failed, args = self.check_params(args, kwargs, "failed", False, False, "bool", [])
         self.delete, args = self.check_params(args, kwargs, "delete", False, False, "bool", [])
@@ -2002,7 +2003,7 @@ class CMDShowAddExisting(ApiCall):
         if i_quality_id or a_quality_id:
             new_quality = Quality.combineQualities(i_quality_id, a_quality_id)
 
-        sickbeard.showQueueScheduler.action.addShow(
+        sickbeard.showQueueScheduler.action.add_show(
             int(indexer), int(self.indexerid), self.location,
             default_status=sickbeard.STATUS_DEFAULT, quality=new_quality,
             season_folders=int(self.season_folders), subtitles=self.subtitles,
@@ -2159,7 +2160,7 @@ class CMDShowAddNew(ApiCall):
             else:
                 helpers.chmodAsParent(show_path)
 
-        sickbeard.showQueueScheduler.action.addShow(
+        sickbeard.showQueueScheduler.action.add_show(
             int(indexer), int(self.indexerid), show_path, default_status=new_status,
             quality=new_quality, season_folders=int(self.season_folders),
             lang=self.lang, subtitles=self.subtitles, anime=self.anime,
@@ -2706,7 +2707,7 @@ class CMDShowUpdate(ApiCall):
             return _responds(RESULT_FAILURE, msg="Show not found")
 
         try:
-            sickbeard.showQueueScheduler.action.updateShow(show_obj, True)  # @UndefinedVariable
+            sickbeard.showQueueScheduler.action.update_show(show_obj, True)  # @UndefinedVariable
             return _responds(RESULT_SUCCESS, msg=str(show_obj.name) + " has queued to be updated")
         except CantUpdateShowException as e:
             logger.log("API::Unable to update show: {0}".format(e), logger.DEBUG)
