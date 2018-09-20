@@ -20,31 +20,44 @@
 from __future__ import print_function, unicode_literals
 
 import re
-from datetime import datetime
-
 from base64 import b16encode, b32decode
+from datetime import datetime
 from itertools import chain
 from os.path import join
 from random import shuffle
+
 import six
+from requests.utils import add_dict_to_cookiejar
 
 import sickbeard
 from sickbeard import logger
 from sickbeard.classes import Proper, SearchResult
 from sickbeard.common import MULTI_EP_RESULT, Quality, SEASON_RESULT, UA_POOL
 from sickbeard.db import DBConnection
-from sickbeard.helpers import download_file, getURL, remove_file_failed, make_session
+from sickbeard.helpers import download_file, getURL, make_session, remove_file_failed
 from sickbeard.name_parser.parser import InvalidNameException, InvalidShowException, NameParser
 from sickbeard.show_name_helpers import allPossibleShowNames
 from sickbeard.tvcache import TVCache
-from sickrage.helper.common import replace_extension, sanitize_filename
+from sickrage.helper.common import sanitize_filename
 from sickrage.helper.encoding import ek
-from requests.utils import add_dict_to_cookiejar
 
 
 class GenericProvider(object):  # pylint: disable=too-many-instance-attributes
     NZB = 'nzb'
+    NZBDATA = 'nzbdata'
     TORRENT = 'torrent'
+
+    PROVIDER_BROKEN = 0
+    PROVIDER_DAILY = 1
+    PROVIDER_BACKLOG = 2
+    PROVIDER_OK = 3
+
+    ProviderStatus = {
+        PROVIDER_BROKEN: _("Not working"),
+        PROVIDER_DAILY: _("Daily/RSS only"),
+        PROVIDER_BACKLOG: _("Backlog/Manual Search only"),
+        PROVIDER_OK: _("Daily/RSS and Backlog/Manual Searches working")
+    }
 
     def __init__(self, name):
         self.name = name
@@ -80,6 +93,9 @@ class GenericProvider(object):  # pylint: disable=too-many-instance-attributes
         self.cookies = ''
         self.rss_cookies = ''
 
+        self.ability_status = self.PROVIDER_OK
+
+
         shuffle(self.bt_cache_urls)
 
     def download_result(self, result):
@@ -99,16 +115,15 @@ class GenericProvider(object):  # pylint: disable=too-many-instance-attributes
 
             logger.log('Downloading a result from {0} at {1}'.format(self.name, url))
 
-            if url.endswith(GenericProvider.TORRENT) and filename.endswith(GenericProvider.NZB):
-                filename = replace_extension(filename, GenericProvider.TORRENT)
-
-            if download_file(url, filename, session=self.session, headers=self.headers, hooks={'response': self.get_url_hook}):
-                if self._verify_download(filename):
-                    logger.log('Saved result to {0}'.format(filename), logger.INFO)
+            downloaded_filename = download_file(url, filename, session=self.session, headers=self.headers,
+                                                hooks={'response': self.get_url_hook}, return_filename=True)
+            if downloaded_filename:
+                if self._verify_download(downloaded_filename):
+                    logger.log('Saved result to {0}'.format(downloaded_filename), logger.INFO)
                     return True
 
                 logger.log('Could not download {0}'.format(url), logger.WARNING)
-                remove_file_failed(filename)
+                remove_file_failed(downloaded_filename)
 
         if urls:
             logger.log('Failed to download any results', logger.WARNING)
@@ -328,8 +343,8 @@ class GenericProvider(object):  # pylint: disable=too-many-instance-attributes
 
         return results
 
-    def get_id(self):
-        return GenericProvider.make_id(self.name)
+    def get_id(self, suffix=''):
+        return GenericProvider.make_id(self.name) + six.text_type(suffix)
 
     def get_quality(self, item, anime=False):
         (title, url_) = self._get_title_and_url(item)
@@ -359,11 +374,36 @@ class GenericProvider(object):  # pylint: disable=too-many-instance-attributes
     def image_name(self):
         return self.get_id() + '.png'
 
+    @property
     def is_active(self):  # pylint: disable=no-self-use
         return False
 
+    @property
     def is_enabled(self):
         return bool(self.enabled)
+
+    @property
+    def daily_enabled(self):
+        return int(self.enable_daily)
+
+    @property
+    def backlog_enabled(self):
+        return int(self.enable_backlog)
+
+    @property
+    def search_fallback_enabled(self):
+        return int(self.search_fallback)
+
+    @property
+    def can_daily(self):
+        return self.ability_status & self.PROVIDER_DAILY != 0
+
+    @property
+    def can_backlog(self):
+        return self.ability_status & self.PROVIDER_BACKLOG != 0 and self.supports_backlog
+
+    def status(self):
+        return self.ProviderStatus.get(self.ability_status)
 
     @staticmethod
     def make_id(name):

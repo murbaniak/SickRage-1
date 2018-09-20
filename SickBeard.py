@@ -1,6 +1,9 @@
 #!/usr/bin/env python2.7
 # -*- coding: utf-8 -*
-# Author: miigotu <miigotu@gmail.com>
+# Author: Nic Wolfe <nic@wolfeden.ca>
+# URL: http://code.google.com/p/sickbeard/
+#
+# Rewrite Author: miigotu <miigotu@gmail.com>
 # URL: https://sickrage.github.io
 #
 # This file is part of SickRage.
@@ -513,7 +516,7 @@ class SickRage(object):
             updater = GitUpdateManager()
             if not run_git(updater, 'config remote.origin.url https://github.com/SickRage/SickRage.git'):
                 return False
-            if not run_git(updater, 'fetch origin'):
+            if not run_git(updater, 'fetch origin --prune'):
                 return False
             if not run_git(updater, 'checkout master'):
                 return False

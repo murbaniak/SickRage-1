@@ -1,7 +1,8 @@
 <%inherit file="/layouts/config.mako"/>
 <%!
-    from sickbeard import subtitles
     import sickbeard
+    from sickbeard import subtitles
+    from sickbeard.filters import hide
     from sickbeard.helpers import anon_url
 %>
 
@@ -14,10 +15,10 @@
                 preventDuplicates: true,
                 prePopulate: [${','.join("{\"id\": \"" + code + "\", name: \"" + subtitles.name_from_code(code) + "\"}" for code in subtitles.wanted_languages())}],
                 resultsFormatter: function(item) {
-                    return "<li><img src='${srRoot}/images/subtitles/flags/" + item.id + ".png' onError='this.onerror=null;this.src=\"${srRoot}/images/flags/unknown.png\";' style='vertical-align: middle !important;' /> " + item.name + "</li>"
+                    return "<li><img src='${srRoot}/images/subtitles/flags/" + item.id + ".png' onError='this.onerror=null;this.src=\"${static_url('images/flags/unknown.png')}\";' style='vertical-align: middle !important;' /> " + item.name + "</li>"
                 },
                 tokenFormatter: function(item) {
-                    return "<li><img src='${srRoot}/images/subtitles/flags/" + item.id + ".png' onError='this.onerror=null;this.src=\"${srRoot}/images/flags/unknown.png\";' style='vertical-align: middle !important;' /> " + item.name + "</li>"
+                    return "<li><img src='${srRoot}/images/subtitles/flags/" + item.id + ".png' onError='this.onerror=null;this.src=\"${static_url('images/flags/unknown.png')}\";' style='vertical-align: middle !important;' /> " + item.name + "</li>"
                 }
             });
         });
@@ -295,7 +296,7 @@
                                             <input type="checkbox" id="enable_${curService['name']}"
                                                    class="service_enabler" ${('', 'checked="checked"')[curService['enabled'] is True]}/>
                                             <a href="${anon_url(curService['url'])}" class="imgLink" target="_new">
-                                                <img src="${srRoot}/images/subtitles/${curService['image']}"
+                                                <img src="${static_url('images/subtitles/' + curService['image'])}"
                                                      alt="${curService['url']}" title="${curService['url']}" width="16"
                                                      height="16" style="vertical-align:middle;"/>
                                             </a>
@@ -328,7 +329,8 @@
                                 'legendastv': {'user': sickbeard.LEGENDASTV_USER, 'pass': sickbeard.LEGENDASTV_PASS},
                                 'addic7ed': {'user': sickbeard.ADDIC7ED_USER, 'pass': sickbeard.ADDIC7ED_PASS},
                                 'itasa': {'user': sickbeard.ITASA_USER, 'pass': sickbeard.ITASA_PASS},
-                                'opensubtitles': {'user': sickbeard.OPENSUBTITLES_USER, 'pass': sickbeard.OPENSUBTITLES_PASS}
+                                'opensubtitles': {'user': sickbeard.OPENSUBTITLES_USER, 'pass': sickbeard.OPENSUBTITLES_PASS},
+                                'subscenter': {'user': sickbeard.SUBSCENTER_USER, 'pass': sickbeard.SUBSCENTER_PASS}
                             }
                         %>
                         % for curService in sickbeard.subtitles.sorted_service_list():
@@ -361,11 +363,11 @@
                                     </div>
                                     <div class="row">
                                         <div class="col-md-12">
-                                            <input type="password" name="${curService['name']}_pass"
-                                                   id="${curService['name']}_pass"
-                                                   value="${providerLoginDict[curService['name']]['pass']}"
-                                                   class="form-control input-sm input300" autocomplete="no"
-                                                   autocapitalize="off" title="Password"/>
+                                            <input
+                                                type="password" name="${curService['name']}_pass" id="${curService['name']}_pass"
+                                                value="${providerLoginDict[curService['name']]['pass']|hide}"
+                                                class="form-control input-sm input300" autocomplete="no" autocapitalize="off" title="Password"
+                                            />
                                         </div>
                                     </div>
                                 </div>

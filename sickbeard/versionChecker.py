@@ -30,12 +30,12 @@ import tarfile
 import time
 import traceback
 
+import six
+
 import sickbeard
 from sickbeard import db, helpers, logger, notifiers, ui
 from sickrage.helper.encoding import ek
 from sickrage.helper.exceptions import ex
-
-import six
 
 
 class CheckVersion(object):
@@ -218,7 +218,7 @@ class CheckVersion(object):
             match = re.search(r"MAX_DB_VERSION\s=\s(?P<version>\d{2,3})", response)
             branchDestDBversion = int(match.group('version'))
             main_db_con = db.DBConnection()
-            branchCurrDBversion = main_db_con.checkDBVersion()
+            branchCurrDBversion = main_db_con.get_db_version()
             if branchDestDBversion > branchCurrDBversion:
                 return 'upgrade'
             elif branchDestDBversion == branchCurrDBversion:
@@ -509,7 +509,7 @@ class GitUpdateManager(UpdateManager):
         self.update_remote_origin()
 
         # get all new info from github
-        output, errors_, exit_status = self._run_git(self._git_path, 'fetch {0}'.format(sickbeard.GIT_REMOTE))
+        output, errors_, exit_status = self._run_git(self._git_path, 'fetch {0} --prune'.format(sickbeard.GIT_REMOTE))
         if exit_status != 0:
             logger.log("Unable to contact github, can't check for update", logger.WARNING)
             return
@@ -773,7 +773,7 @@ class SourceUpdateManager(UpdateManager):
             commits_behind = ngettext("(you're {num_commits} commit behind)", "(you're {num_commits} commits behind)",
                                       self._num_commits_behind).format(num_commits=self._num_commits_behind)
             newest_text = _('There is a <a href="{compare_url}" onclick="window.open(this.href); return false;">'
-                            'newer version available</a> (you\'re {commits_behind} behind) &mdash; '
+                            'newer version available</a> {commits_behind} &mdash; '
                             '<a href="{update_url}">Update Now</a>').format(
                 compare_url=url, commits_behind=commits_behind, update_url=self.get_update_url())
         else:

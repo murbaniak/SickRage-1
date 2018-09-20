@@ -24,15 +24,16 @@ from __future__ import print_function, unicode_literals
 
 import re
 
+from sickbeard import classes, helpers, logger
+from sickbeard.name_parser.parser import InvalidNameException, InvalidShowException, NameParser
+from sickrage.helper.encoding import ek, ss
+from sickrage.helper.exceptions import ex
+
 try:
     import xml.etree.cElementTree as ETree
 except ImportError:
     import xml.etree.ElementTree as ETree
 
-from sickbeard import logger, classes, helpers
-from sickbeard.name_parser.parser import NameParser, InvalidNameException, InvalidShowException
-from sickrage.helper.encoding import ek, ss
-from sickrage.helper.exceptions import ex
 
 
 def get_season_nzbs(name, url_data, season):
@@ -153,7 +154,7 @@ def split_result(obj):
     """
     url_data = helpers.getURL(obj.url, session=helpers.make_session(), returns='content')
     if url_data is None:
-        logger.log("Unable to load url " + obj.url + ", can't download season NZB", logger.ERROR)
+        logger.log("Unable to load url " + obj.url + ", can't download season NZB", logger.WARNING)
         return []
 
     # parse the season ep name

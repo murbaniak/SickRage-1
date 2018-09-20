@@ -50,17 +50,18 @@ overwrite_cassettes = False
 disabled_provider_tests = {
     # ???
     'Cpasbien': ['test_rss_search', 'test_episode_search', 'test_season_search'],
-    # ???
-    'Torrent9': ['test_rss_search', 'test_episode_search', 'test_season_search'],
     # api_maintenance still
     'TorrentProject': ['test_rss_search', 'test_episode_search', 'test_season_search'],
     # Have to trick it into thinking is an anime search, and add string overrides
     'TokyoToshokan': ['test_rss_search', 'test_episode_search', 'test_season_search'],
     # 'Torrrentz': ['test_rss_search', 'test_episode_search', 'test_season_search'],
+    # RSS search is broken (site's fault)
+    'LimeTorrents': ['test_rss_search', 'test_episode_search', 'test_season_search'],
 }
 test_string_overrides = {
     'Cpasbien': {'Episode': ['The 100 S02E16'], 'Season': ['The 100 S02']},
-    'Torrent9': {'Episode': ['NCIS S14E09'], 'Season': ['NCIS S14']},
+    'Torrent9': {'Episode': ['Arrow S05E01'], 'Season': ['Arrow S05']},
+    'Nyaa': {'Episode': ['Fairy Tail S2'], 'Season': ['Fairy Tail S2']},
     'TokyoToshokan': {'Episode': ['Fairy Tail S2'], 'Season': ['Fairy Tail S2']},
     'HorribleSubs': {'Episode': ['Fairy Tail S2'], 'Season': ['Fairy Tail S2']},
 }
@@ -107,8 +108,7 @@ class BaseParser(type):
             def magic(self, *args, **kwargs):
                 # pylint:disable=no-member
                 if func.func_name in disabled_provider_tests.get(self.provider.name, []):
-                    print("skipped")
-                    return unittest.skip(str(self.provider.name))
+                    self.skipTest('Test is programmatically disabled for provider {}'.format(self.provider.name))
                 func(self, *args, **kwargs)
             return magic
 
@@ -186,7 +186,7 @@ class BaseParser(type):
                 if result[b'link'].startswith('magnet'):
                     self.assertTrue(magnet_regex.match(result[b'link']))
                 else:
-                    self.assertTrue(validators.url(result[b'link'], require_tld=False))
+                    self.assertTrue(validators.url(result[b'link']))
 
                 self.assertIsInstance(self.provider._get_size(result), six.integer_types)  # pylint: disable=protected-access
                 self.assertTrue(all(self.provider._get_title_and_url(result)))  # pylint: disable=protected-access
@@ -209,7 +209,7 @@ def generate_test_cases():
     """
     for p in sickbeard.providers.__all__:
         provider = sickbeard.providers.getProviderModule(p).provider
-        if provider.supports_backlog and provider.provider_type == 'torrent' and provider.public:
+        if provider.can_backlog and provider.provider_type == 'torrent' and provider.public:
             generated_class = type(str(provider.name), (BaseParser.TestCase,), {'provider': provider})
             globals()[generated_class.__name__] = generated_class
             del generated_class

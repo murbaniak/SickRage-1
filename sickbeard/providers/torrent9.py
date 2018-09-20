@@ -24,7 +24,6 @@ import re
 
 from sickbeard import logger, tvcache
 from sickbeard.bs4_parser import BS4Parser
-
 from sickrage.helper.common import convert_size, try_int
 from sickrage.providers.torrent.TorrentProvider import TorrentProvider
 
@@ -38,10 +37,26 @@ class Torrent9Provider(TorrentProvider):
         self.public = True
         self.minseed = None
         self.minleech = None
-        self.url = "http://www.torrent9.biz"
+        self.url = "http://www.torrent9.red"
 
         self.proper_strings = ['PROPER', 'REPACK']
         self.cache = tvcache.TVCache(self)
+
+    def _retrieve_dllink_from_url(self, inner_url, type="torrent"):
+        data = self.get_url(inner_url, returns='text')
+        res = {
+            "torrent": "",
+            "magnet": "",
+        }
+        with BS4Parser(data, 'html5lib') as html:
+            download_btns = html.findAll("div", {"class": "download-btn"})
+            for btn in download_btns:
+                link = btn.find('a')["href"]
+                if link.startswith("magnet"):
+                    res["magnet"] = link
+                else:
+                    res["torrent"] = self.url + link
+        return res[type]
 
     def search(self, search_strings, age=0, ep_obj=None):  # pylint: disable=too-many-locals
         results = []
@@ -56,22 +71,29 @@ class Torrent9Provider(TorrentProvider):
                     logger.log("Search string: {0}".format
                                (search_string.decode("utf-8")), logger.DEBUG)
 
-                    search_url = self.url + '/search_torrent/' + search_string.replace('.', '-').replace(' ', '-') + '.html,trie-seeds-d'
+                    search_url = self.url + '/search_torrent/' + search_string.replace('.', '-').replace(' ', '-') + '.html'
                 else:
-                    search_url = self.url + '/torrents_series.html,trie-date-d'
+                    search_url = self.url + '/torrents_series.html'
 
                 data = self.get_url(search_url, returns='text')
                 if not data:
                     continue
 
                 with BS4Parser(data, 'html5lib') as html:
-                    torrent_rows = html.findAll('tr')
+                    torrent_table = html.find('div', {'class': 'table-responsive'})
+                    if torrent_table:
+                        torrent_rows = torrent_table.findAll('tr')
+                    else:
+                        torrent_rows = None
+
+                    if not torrent_rows:
+                        continue
                     for result in torrent_rows:
                         try:
                             title = result.find('a').get_text(strip=False).replace("HDTV", "HDTV x264-Torrent9")
                             title = re.sub(r' Saison', ' Season', title, flags=re.I)
-                            tmp = result.find("a")['href'].split('/')[-1].replace('.html', '.torrent').strip()
-                            download_url = (self.url + '/get_torrent/{0}'.format(tmp) + ".torrent")
+                            tmp = result.find("a")['href']
+                            download_url = self._retrieve_dllink_from_url(self.url + tmp)
                             if not all([title, download_url]):
                                 continue
 

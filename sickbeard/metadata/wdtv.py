@@ -25,10 +25,8 @@ import os
 import re
 
 import sickbeard
-
+from sickbeard import helpers, logger
 from sickbeard.metadata import generic
-
-from sickbeard import logger, helpers
 from sickrage.helper.common import dateFormat, replace_extension
 from sickrage.helper.encoding import ek
 from sickrage.helper.exceptions import ex, ShowNotFoundException
@@ -237,7 +235,7 @@ class WDTVMetadata(generic.GenericMetadata):
             episodeID.text = str(curEpToWrite.indexerid)
 
             title = etree.SubElement(episode, "title")
-            title.text = ep_obj.prettyName()
+            title.text = ep_obj.pretty_name()
 
             if getattr(myShow, 'seriesname', None):
                 seriesName = etree.SubElement(episode, "series_name")

@@ -20,32 +20,27 @@
 
 from __future__ import print_function, unicode_literals
 
-import os
 import io
+import os
 import re
+
+import fanart as fanart_module
+import six
+from fanart.core import Request as fanartRequest
+from tmdb_api.tmdb_api import TMDB
+
+import sickbeard
+from sickbeard import helpers, logger
+from sickbeard.metadata import helpers as metadata_helpers
+from sickbeard.show_name_helpers import allPossibleShowNames
+from sickrage.helper.common import replace_extension, try_int
+from sickrage.helper.encoding import ek
+from sickrage.helper.exceptions import ex
 
 try:
     import xml.etree.cElementTree as etree
 except ImportError:
     import xml.etree.ElementTree as etree
-
-import sickbeard
-
-from sickbeard import helpers
-from sickbeard import logger
-from sickbeard.metadata import helpers as metadata_helpers
-from sickbeard.show_name_helpers import allPossibleShowNames
-from sickrage.helper.common import replace_extension, try_int
-from sickrage.helper.exceptions import ex
-from sickrage.helper.encoding import ek
-
-from tmdb_api.tmdb_api import TMDB
-
-import fanart as fanart_module
-from fanart.core import Request as fanartRequest
-
-
-import six
 
 
 class GenericMetadata(object):
@@ -260,7 +255,7 @@ class GenericMetadata(object):
 
     def create_episode_metadata(self, ep_obj):
         if self.episode_metadata and ep_obj and not self._has_episode_metadata(ep_obj):
-            logger.log("Metadata provider " + self.name + " creating episode metadata for " + ep_obj.prettyName(),
+            logger.log("Metadata provider " + self.name + " creating episode metadata for " + ep_obj.pretty_name(),
                        logger.DEBUG)
             return self.write_ep_file(ep_obj)
         return False
@@ -282,6 +277,8 @@ class GenericMetadata(object):
 
                 root = showXML.getroot()
                 if indexerid is not None:
+                    if indexerid.text == str(show_obj.indexerid):
+                        return True
                     indexerid.text = str(show_obj.indexerid)
                 else:
                     etree.SubElement(root, "id").text = str(show_obj.indexerid)
@@ -318,7 +315,7 @@ class GenericMetadata(object):
 
     def create_episode_thumb(self, ep_obj):
         if self.episode_thumbnails and ep_obj and not self._has_episode_thumb(ep_obj):
-            logger.log("Metadata provider " + self.name + " creating episode thumbnail for " + ep_obj.prettyName(),
+            logger.log("Metadata provider " + self.name + " creating episode thumbnail for " + ep_obj.pretty_name(),
                        logger.DEBUG)
             return self.save_thumbnail(ep_obj)
         return False
