@@ -21,10 +21,10 @@
 from __future__ import unicode_literals
 
 import re
+
 from requests.compat import urljoin
 
 from sickbeard import logger, tvcache
-
 from sickrage.providers.nzb.NZBProvider import NZBProvider
 
 
@@ -39,6 +39,7 @@ class BinSearchProvider(NZBProvider):
 
         self.public = True
         self.supports_backlog = False
+        self.ability_status = self.PROVIDER_BROKEN
 
         self.cache = BinSearchCache(self, min_time=30)  # only poll Binsearch every 30 minutes max
 

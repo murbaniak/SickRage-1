@@ -19,8 +19,8 @@
 
 from __future__ import unicode_literals
 
-
 from datetime import datetime
+
 from feedparser.util import FeedParserDict
 from hachoir_parser import createParser
 
@@ -29,7 +29,6 @@ from sickbeard import logger
 from sickbeard.classes import Proper, TorrentSearchResult
 from sickbeard.common import Quality
 from sickbeard.db import DBConnection
-
 from sickrage.helper.common import try_int
 from sickrage.helper.exceptions import ex
 from sickrage.providers.GenericProvider import GenericProvider
@@ -71,8 +70,9 @@ class TorrentProvider(GenericProvider):
 
         return results
 
+    @property
     def is_active(self):
-        return bool(sickbeard.USE_TORRENTS) and self.is_enabled()
+        return bool(sickbeard.USE_TORRENTS) and self.is_enabled
 
     @property
     def _custom_trackers(self):

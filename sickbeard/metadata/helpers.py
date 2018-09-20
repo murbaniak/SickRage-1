@@ -20,8 +20,8 @@
 
 from __future__ import print_function, unicode_literals
 
-from sickbeard import helpers
-from sickbeard import logger
+import sickbeard
+from sickbeard import helpers, logger
 
 meta_session = helpers.make_session()
 
@@ -38,7 +38,7 @@ def getShowImage(url, imgNum=None):
 
     logger.log("Fetching image from " + tempURL, logger.DEBUG)
 
-    image_data = helpers.getURL(tempURL, session=meta_session, returns='content')
+    image_data = helpers.getURL(tempURL, session=meta_session, returns='content', allow_proxy=sickbeard.PROXY_INDEXERS)
     if image_data is None:
         logger.log("There was an error trying to retrieve the image, aborting", logger.WARNING)
         return

@@ -29,7 +29,7 @@ import traceback
 
 import sickbeard
 from sickbeard import db, helpers, logger
-from sickbeard.common import DOWNLOADED, Quality, SNATCHED, SNATCHED_PROPER, cpu_presets
+from sickbeard.common import cpu_presets, DOWNLOADED, Quality, SNATCHED, SNATCHED_PROPER
 from sickbeard.name_parser.parser import InvalidNameException, InvalidShowException, NameParser
 from sickbeard.search import pickBestResult, snatchEpisode
 from sickrage.helper.exceptions import AuthException, ex
@@ -79,7 +79,7 @@ class ProperFinder(object):  # pylint: disable=too-few-public-methods
 
         # for each provider get a list of the
         origThreadName = threading.currentThread().name
-        providers = [x for x in sickbeard.providers.sortedProviderList(sickbeard.RANDOMIZE_PROVIDERS) if x.is_active()]
+        providers = [x for x in sickbeard.providers.sortedProviderList(sickbeard.RANDOMIZE_PROVIDERS) if x.is_active]
         for curProvider in providers:
             threading.currentThread().name = origThreadName + " :: [" + curProvider.name + "]"
 

@@ -18,6 +18,7 @@
 # along with SickRage. If not, see <http://www.gnu.org/licenses/>.
 
 from __future__ import unicode_literals
+
 import re
 
 from requests.compat import urljoin
@@ -25,7 +26,6 @@ from requests.utils import dict_from_cookiejar
 
 from sickbeard import logger, tvcache
 from sickbeard.bs4_parser import BS4Parser
-
 from sickrage.helper.common import convert_size, try_int
 from sickrage.providers.torrent.TorrentProvider import TorrentProvider
 
@@ -46,7 +46,7 @@ class FileListProvider(TorrentProvider):  # pylint: disable=too-many-instance-at
         self.minleech = None
 
         # URLs
-        self.url = "http://filelist.ro"
+        self.url = "https://filelist.ro"
         self.urls = {
             "login": urljoin(self.url, "takelogin.php"),
             "search": urljoin(self.url, "browse.php"),

@@ -21,12 +21,12 @@
 from __future__ import print_function, unicode_literals
 
 import re
+
 from requests.utils import dict_from_cookiejar
+from six.moves.urllib.parse import quote_plus
 
 from sickbeard import logger, tvcache
 from sickbeard.bs4_parser import BS4Parser
-from six.moves.urllib.parse import quote_plus
-
 from sickrage.helper.common import convert_size, try_int
 from sickrage.providers.torrent.TorrentProvider import TorrentProvider
 
@@ -187,7 +187,5 @@ class HDTorrentsProvider_IT(TorrentProvider):  # pylint: disable=too-many-instan
 
         return results
 
-    def seed_ratio(self):
-        return self.ratio
 
 provider = HDTorrentsProvider_IT()

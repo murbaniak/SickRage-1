@@ -31,7 +31,6 @@ import operator
 import os
 import platform
 import random
-import rarfile
 import re
 import shutil
 import socket
@@ -46,25 +45,34 @@ from contextlib import closing
 from itertools import cycle, izip
 
 import adba
+import bencode
 import certifi
 import cfscrape
+import rarfile
 import requests
-from cachecontrol import CacheControl
-from requests.utils import urlparse
-from requests.compat import urljoin
 import six
-
+from cachecontrol import CacheControl
+from requests.compat import urljoin
+from requests.utils import urlparse
 # noinspection PyUnresolvedReferences
 from six.moves import urllib
+# noinspection PyProtectedMember
+from tornado._locale_data import LOCALE_NAMES
 
 import sickbeard
 from sickbeard import classes, db, logger
 from sickbeard.common import USER_AGENT
-from sickrage.helper import MEDIA_EXTENSIONS, SUBTITLE_EXTENSIONS, episode_num, pretty_file_size
+from sickrage.helper import episode_num, MEDIA_EXTENSIONS, pretty_file_size, SUBTITLE_EXTENSIONS
+from sickrage.helper.common import replace_extension
 from sickrage.helper.encoding import ek
 from sickrage.helper.exceptions import ex
 from sickrage.show.Show import Show
 
+# Add some missing languages
+LOCALE_NAMES.update({
+    "ar_SA": {"name_en": "Arabic (Saudi Arabia)", "name": "(العربية (المملكة العربية السعودية"},
+    "no_NO": {"name_en": "Norwegian", "name": "Norsk"},
+})
 
 # pylint: disable=protected-access
 # Access to a protected member of a client class
@@ -162,6 +170,8 @@ def remove_non_release_groups(name):
         r'-Siklopentan$': 'searchre',
         r'-Chamele0n$': 'searchre',
         r'-Obfuscated$': 'searchre',
+        r'-Pre$': 'searchre',
+        r'-postbot$': 'searchre',
         r'-BUYMORE$': 'searchre',
         r'-\[SpastikusTV\]$': 'searchre',
         r'-RP$': 'searchre',
@@ -839,22 +849,25 @@ def create_https_certificates(ssl_cert, ssl_key):
     # assert isinstance(ssl_cert, unicode)
 
     try:
-        from OpenSSL import crypto  # noinspection PyUnresolvedReferences
-        from certgen import createKeyPair, createCertRequest, createCertificate, TYPE_RSA, \
-            serial  # @UnresolvedImport
+        # noinspection PyUnresolvedReferences
+        from OpenSSL import crypto
+        from certgen import createKeyPair, createCertRequest, createCertificate, TYPE_RSA
     except Exception:
         logger.log("pyopenssl module missing, please install for https access", logger.WARNING)
         return False
 
+    import time
+    serial = int(time.time())
+    validity_period = (0, 60 * 60 * 24 * 365 * 10)  # ten years
     # Create the CA Certificate
     cakey = createKeyPair(TYPE_RSA, 4096)
     careq = createCertRequest(cakey, CN='Certificate Authority')
-    cacert = createCertificate(careq, (careq, cakey), serial, (0, 60 * 60 * 24 * 365 * 10))  # ten years
+    cacert = createCertificate(careq, (careq, cakey), serial, validity_period, b'sha256')
 
     cname = 'SickRage'
     pkey = createKeyPair(TYPE_RSA, 4096)
     req = createCertRequest(pkey, CN=cname)
-    cert = createCertificate(req, (cacert, cakey), serial, (0, 60 * 60 * 24 * 365 * 10))  # ten years
+    cert = createCertificate(req, (cacert, cakey), serial, validity_period, b'sha256')
 
     # Save the key and certificate to disk
     try:
@@ -1006,6 +1019,9 @@ unique_key1 = hex(uuid.getnode() ** 2)  # Used in encryption v1
 # Encryption Functions
 def encrypt(data, encryption_version=0, _decrypt=False):
     # Version 1: Simple XOR encryption (this is not very secure, but works)
+    if data is None:
+        return ""
+
     if encryption_version == 1:
         if _decrypt:
             return ''.join(chr(ord(x) ^ ord(y)) for (x, y) in izip(base64.decodestring(data), cycle(unique_key1)))
@@ -1372,7 +1388,7 @@ def request_defaults(kwargs):
     hooks = kwargs.pop('hooks', None)
     cookies = kwargs.pop('cookies', None)
     allow_proxy = kwargs.pop('allow_proxy', True)
-    verify = certifi.old_where() if all([sickbeard.SSL_VERIFY, kwargs.pop('verify', True)]) else False
+    verify = certifi.where() if all([sickbeard.SSL_VERIFY, kwargs.pop('verify', True)]) else False
 
     # request session proxies
     if allow_proxy and sickbeard.PROXY_SETTING:
@@ -1470,6 +1486,8 @@ def download_file(url, filename, session=None, headers=None, **kwargs):  # pylin
     :return: True on success, False on failure
     """
 
+    return_filename = kwargs.get('return_filename', False)
+
     try:
         hooks, cookies, verify, proxies = request_defaults(kwargs)
 
@@ -1478,6 +1496,10 @@ def download_file(url, filename, session=None, headers=None, **kwargs):  # pylin
                                  hooks=hooks, proxies=proxies)) as resp:
 
             resp.raise_for_status()
+
+            # Workaround for jackett.
+            if filename.endswith('nzb') and resp.headers.get('content-type') == 'application/x-bittorrent':
+                filename = replace_extension(filename, 'torrent')
 
             try:
                 with io.open(filename, 'wb') as fp:
@@ -1492,9 +1514,9 @@ def download_file(url, filename, session=None, headers=None, **kwargs):  # pylin
 
     except Exception as error:
         handle_requests_exception(error)
-        return False
+        return False if not return_filename else ""
 
-    return True
+    return True if not return_filename else filename
 
 
 def handle_requests_exception(requests_exception):  # pylint: disable=too-many-branches, too-many-statements
@@ -1898,3 +1920,19 @@ def manage_torrents_url(reset=False):
     sickbeard.CLIENT_WEB_URLS['torrent'] = ('', torrent_ui_url)[test_exists(torrent_ui_url)]
 
     return sickbeard.CLIENT_WEB_URLS.get('torrent')
+
+
+def bdecode(x, allow_extra_data=False):
+    """
+    Custom bdecode function to ignore the 'data after valid prefix' exception.
+
+    :param allow_extra_data: Set to True to allow extra data after valid prefix
+    :return: bdecoded data
+    """
+    try:
+        r, l = bencode.decode_func[x[0]](x, 0)
+    except (IndexError, KeyError, ValueError):
+        raise bencode.BTL.BTFailure("not a valid bencoded string")
+    if not allow_extra_data and l != len(x):
+        raise bencode.BTL.BTFailure("invalid bencoded value (data after valid prefix)")
+    return r

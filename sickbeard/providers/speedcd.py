@@ -21,13 +21,13 @@
 from __future__ import print_function, unicode_literals
 
 import re
+import string
 
 from requests.compat import urljoin
 from requests.utils import dict_from_cookiejar
 
 from sickbeard import logger, tvcache
 from sickbeard.bs4_parser import BS4Parser
-
 from sickrage.helper.common import convert_size, try_int
 from sickrage.providers.torrent.TorrentProvider import TorrentProvider
 
@@ -130,7 +130,7 @@ class SpeedCDProvider(TorrentProvider):  # pylint: disable=too-many-instance-att
                     logger.log("Search string: {0}".format
                                (search_string.decode("utf-8")), logger.DEBUG)
 
-                search_params['search'] = search_string
+                search_params['search'] = search_string.translate(None, string.punctuation)
 
                 data = self.get_url(self.urls['search'], params=search_params, returns='text')
                 if not data:

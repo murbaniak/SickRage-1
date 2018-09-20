@@ -4,27 +4,27 @@ from __future__ import print_function, unicode_literals
 
 import os
 import threading
-from socket import error as SocketError, errno
+from socket import errno, error as SocketError
 
 from tornado.ioloop import IOLoop
-from tornado.routes import route
 from tornado.web import Application, RedirectHandler, StaticFileHandler
 
 import sickbeard
 from sickbeard import logger
 from sickbeard.helpers import create_https_certificates, generateApiKey
+from sickbeard.routes import route
 from sickbeard.webapi import ApiHandler
 from sickbeard.webserve import CalendarHandler, KeyHandler, LoginHandler, LogoutHandler
 from sickrage.helper.encoding import ek
 
 
 class SRWebServer(threading.Thread):  # pylint: disable=too-many-instance-attributes
-    def __init__(self, options=None, io_loop=None):
+    def __init__(self, options=None):
         threading.Thread.__init__(self)
         self.daemon = True
         self.alive = True
         self.name = "TORNADO"
-        self.io_loop = io_loop or IOLoop.current()
+        self.io_loop = IOLoop.current()
 
         self.options = options or {}
         self.options.setdefault('port', 8081)
@@ -33,6 +33,7 @@ class SRWebServer(threading.Thread):  # pylint: disable=too-many-instance-attrib
         self.options.setdefault('username', '')
         self.options.setdefault('password', '')
         self.options.setdefault('web_root', '/')
+
         assert isinstance(self.options['port'], int)
         assert 'data_root' in self.options
 
@@ -81,6 +82,8 @@ class SRWebServer(threading.Thread):  # pylint: disable=too-many-instance-attrib
             gzip=sickbeard.WEB_USE_GZIP,
             cookie_secret=sickbeard.WEB_COOKIE_SECRET,
             login_url='{0}/login/'.format(self.options['web_root']),
+            static_path=self.options['data_root'],
+            static_url_prefix='{0}/'.format(self.options['web_root']),
         )
 
         # Static File Handlers
@@ -129,8 +132,8 @@ class SRWebServer(threading.Thread):  # pylint: disable=too-many-instance-attrib
             (r'{0}/login(/?)'.format(self.options['web_root']), LoginHandler),
             (r'{0}/logout(/?)'.format(self.options['web_root']), LogoutHandler),
 
-            # Web calendar handler (Needed because option Unprotected calendar)
-            (r'{0}/calendar'.format(self.options['web_root']), CalendarHandler),
+            # Web calendar handler (Needed for the "Unprotected Calendar" option)
+            (r'{0}/calendar/?'.format(self.options['web_root']), CalendarHandler),
 
             # webui handlers
         ] + route.get_routes(self.options['web_root']))
