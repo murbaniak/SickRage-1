@@ -1,7 +1,7 @@
 # coding=utf-8
 # Author: Nic Wolfe <nic@wolfeden.ca>
 # Rewrite: Dustyn Gibson (miigotu) <miigotu@gmail.com>
-# URL: https://sick-rage.github.io
+# URL: https://sickchill.github.io
 #
 # This file is part of SickChill.
 #
@@ -199,7 +199,7 @@ class NewznabProvider(NZBProvider):  # pylint: disable=too-many-instance-attribu
             'NZBFinder.ws|https://nzbfinder.ws/||5030,5040,5010,5045|0|eponly|1|1|1!!!' + \
             'NZBGeek|https://api.nzbgeek.info/||5030,5040|0|eponly|0|0|0!!!' + \
             'NZBs.org|https://nzbs.org/||5030,5040|0|eponly|0|0|0!!!' + \
-            'Usenet-Crawler|https://api.usenet-crawler.com/||5030,5040|0|eponly|0|0|0!!!' + \
+            'Usenet-Crawler|https://usenet-crawler.com/||5030,5040|0|eponly|0|0|0!!!' + \
             'DOGnzb|https://api.dognzb.cr/||5030,5040,5060,5070|0|eponly|0|1|1'
 
     def _check_auth(self):
